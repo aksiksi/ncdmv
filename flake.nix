@@ -43,7 +43,7 @@
         };
         docker = let
           packagePath = self.outputs.packages.${system}.default;
-            in pkgs.dockerTools.buildLayeredImage {
+            in pkgs.dockerTools.buildImage {
           name = "ghcr.io/aksiksi/ncdmv";
           tag = "latest";
           config.Cmd = [ "${packagePath}/bin/server" ];
