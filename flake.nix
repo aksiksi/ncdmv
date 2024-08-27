@@ -37,16 +37,16 @@
           wrapperPath = lib.makeBinPath ([ pkgs.chromium ]);
           postFixup = let
             wrapperPath = self.outputs.packages.${system}.default.wrapperPath; in ''
-            wrapProgram $out/bin/server \
+            wrapProgram $out/bin/ncdmv \
                 --prefix PATH : "${wrapperPath}"
           '';
         };
         docker = let
-          packagePath = self.outputs.packages.${system}.default;
+          pkg = self.outputs.packages.${system}.default;
             in pkgs.dockerTools.buildImage {
           name = "ghcr.io/aksiksi/ncdmv";
           tag = "latest";
-          config.Cmd = [ "${packagePath}/bin/server" ];
+          config.Entrypoint = [ "${pkg}/bin/ncdmv" ];
         };
       }
     );

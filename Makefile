@@ -3,13 +3,13 @@ SHELL := /bin/bash
 all: db-gen server test
 
 server:
-	go build -o ncdmv ./cmd/server
+	go build -o ncdmv ./cmd/ncdmv
 
 test:
 	go test -v -short ./...
 
 install:
-	go build -v -o /usr/local/bin/ncdmv ./cmd/server
+	go build -v -o /usr/local/bin/ncdmv ./cmd/ncdmv
 
 clean:
 	rm -f ./ncdmv

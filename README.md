@@ -7,7 +7,7 @@ Monitor NCDMV for new appointment slots and get notified through Discord.
 ### Usage
 
 ```
-$ go run ./cmd/server -h
+$ go run ./cmd/ncdmv -h
 Usage of ncdmv:
   -appt_type string
         appointment type (options: permit,driver-license,non-cdl-road-test,driver-license-duplicate,driver-license-renewal,id-card,knowledge-test,motorcycle-skills-test) (default "permit")
@@ -40,25 +40,26 @@ Usage of ncdmv:
 Run in headless mode:
 
 ```
-go run ./cmd/server -locations=cary,durham-east,durham-south -discord_webhook=[WEBHOOK]
+go run ./cmd/ncdmv -locations=cary,durham-east,durham-south -discord_webhook=[WEBHOOK]
 ```
 
 Show the browser with a timeout of 2 minutes each check (across all locations) and an interval of 10 minutes:
 
 ```
-go run ./cmd/server -headless=false -locations=cary,durham-east,durham-south -discord_webhook=[WEBHOOK] -timeout=120 -interval=10
+go run ./cmd/ncdmv -headless=false -locations=cary,durham-east,durham-south -discord_webhook=[WEBHOOK] -timeout=120 -interval=10
 ```
 
 Run on Docker:
 
 ```
-docker run --rm ghcr.io/aksiksi/ncdmv:latest ncdmv -h
+docker run --rm ghcr.io/aksiksi/ncdmv:latest -h
 ```
 
 ### If you are new to Go
+
 1. Install: https://go.dev/doc/install
 2. ```go mod tidy```
-3. ```go run ./cmd/migrate```
+3. ```go run ./cmd/ncdmv-migrate```
 4. Run!
 
 ### Setup (Debian)
