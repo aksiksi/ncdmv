@@ -9,3 +9,4 @@ sql:
         out: "pkg/models"
         emit_exact_table_names: true
         emit_json_tags: true
+        omit_sqlc_version: true

@@ -22,6 +22,6 @@ docker:
 db-gen:
 	docker run --rm \
 		-v $(CURDIR):/src -w /src \
-		kjconroy/sqlc generate
+		sqlc/sqlc generate
 
 .PHONY: all clean db-gen docker install server test
