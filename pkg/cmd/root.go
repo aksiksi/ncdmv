@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -12,7 +11,6 @@ import (
 	"golang.org/x/exp/slog"
 	_ "modernc.org/sqlite"
 
-	"github.com/aksiksi/ncdmv/pkg/models"
 	"github.com/aksiksi/ncdmv/pkg/ncdmv"
 )
 
@@ -69,16 +67,6 @@ func runCommand(args *Args) error {
 	slog.SetDefault(logger)
 	slog.InfoContext(ctx, "Setup logger", "debug", logger.Enabled(ctx, slog.LevelDebug))
 
-	if args.DatabasePath == "" {
-		log.Fatal("--database-path must be non-empty")
-	}
-	if args.ApptType == "" {
-		log.Fatal("--appt-type must be specified")
-	}
-	if len(args.Locations) == 0 {
-		log.Fatalf("--locations must be specified")
-	}
-
 	parsedApptType := ncdmv.StringToAppointmentType(args.ApptType)
 	if parsedApptType == ncdmv.AppointmentTypeInvalid {
 		log.Fatalf("Invalid appointment type specified: %q", args.ApptType)
@@ -93,48 +81,23 @@ func runCommand(args *Args) error {
 		locations = append(locations, parsedLocation)
 	}
 
-	disableGpu := args.DisableGpu
-	slog.InfoContext(ctx, "GPU support", "disabled", disableGpu)
+	clientOpts := ncdmv.ClientOptions{
+		DatabasePath:      args.DatabasePath,
+		DiscordWebhook:    args.DiscordWebhook,
+		StopOnFailure:     args.StopOnFailure,
+		NotifyUnavailable: args.NotifyUnavailable,
+		Headless:          args.Headless,
+		DisableGpu:        args.DisableGpu,
+		Debug:             args.Debug,
+		DebugChrome:       args.DebugChrome,
+	}
 
-	db, err := sql.Open("sqlite", args.DatabasePath)
+	client, err := ncdmv.NewClientFromOptions(ctx, clientOpts)
 	if err != nil {
-		log.Fatalf("Failed to initialize DB: %s", err)
-	}
-	defer db.Close()
-	slog.InfoContext(ctx, "Loaded DB successfully")
-
-	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON;"); err != nil {
-		log.Fatalf("Failed to enable foreign key support: %s", err)
-	}
-	slog.InfoContext(ctx, "Enabled foreign key support")
-
-	slog.InfoContext(ctx, "Running all up migrations...", "databasePath", args.DatabasePath)
-	if err := models.RunMigrations(args.DatabasePath, 0 /* count */, false /* down */); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
-	}
-
-	// Initialize the Chrome context and open a new window.
-	ctx, cancel, err := ncdmv.NewChromeContext(ctx, args.Headless, disableGpu, args.DebugChrome)
-	if err != nil {
-		log.Fatalf("Failed to init Chrome context: %s", err)
-	}
-	defer cancel()
-	slog.InfoContext(ctx, "Initialized Chrome context", "headless", args.Headless, "debug", args.DebugChrome)
-
-	client := ncdmv.NewClient(db, args.DiscordWebhook, args.StopOnFailure, args.NotifyUnavailable)
-	if err != nil {
-		log.Fatalf("failed to create client: %v", err)
-	}
-	slog.InfoContext(ctx, "Created ncdmv client",
-		"webhook", args.DiscordWebhook != "",
-		"stopOnFailure", args.StopOnFailure,
-		"notifyUnavailable", args.NotifyUnavailable,
-	)
-
-	if err := client.Start(ctx, parsedApptType, locations, args.Timeout, args.Interval); err != nil {
 		log.Fatal(err)
 	}
-	return nil
+
+	return client.Start(ctx, parsedApptType, locations, args.Timeout, args.Interval)
 }
 
 func Execute() error {
