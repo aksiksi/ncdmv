@@ -1,61 +1,78 @@
-## ncdmv
+# ncdmv
 
 Monitor NCDMV for new appointment slots and get notified through Discord.
 
 <img src="https://i.imgur.com/pW9Vxio.png" alt="Discord message example" width="75%"/>
 
-### Usage
+## Usage
 
 ```
-$ go run ./cmd/ncdmv -h
-Usage of ncdmv:
-  -appt_type string
-        appointment type (options: permit,driver-license,non-cdl-road-test,driver-license-duplicate,driver-license-renewal,id-card,knowledge-test,motorcycle-skills-test) (default "permit")
-  -database_path string
-        path to database file (default "./database/ncdmv.db")
-  -debug
-        enable debug mode
-  -disable_gpu
-        disable GPU
-  -discord_webhook string
-        Discord webhook URL for notifications (optional)
-  -headless
-        enable headless browser (default true)
-  -interval int
-        interval between checks, in minutes (default 30)
-  -locations string
-        comma-seperated list of locations to check (options: durham-south,hillsborough,raleigh-east,raleigh-north,ahoskie,durham-east,fuquay-varina,garner,raleigh-west,cary,clayton,wendell) (default "cary,durham-east,durham-south")
-  -migrations_path string
-        path to migrations directory
-  -notify_unavailable
-        if true, notify when a previously available appointment becomes unavailable (default true)
-  -stop_on_failure
-        if true, stop completely on a failure instead of just logging
-  -timeout int
-        timeout, in seconds (default 120)
+ncdmv monitors NC DMV appointments
+
+Usage:
+  ncdmv [flags]
+
+Flags:
+  -t, --appt-type string         appointment type (one of: [driver-license-renewal id-card knowledge-test motorcycle-skills-test non-cdl-road-test permit driver-license driver-license-duplicate]) (default "permit")
+  -d, --database-path string     database path
+      --debug                    enable debug mode
+      --disable-gpu              disable GPU acceleration
+  -w, --discord-webhook string   Discord webhook URL
+      --headless                 run Chrome in headless mode (no GUI) (default true)
+  -h, --help                     help for ncdmv
+      --interval duration        interval between searches (default 5m0s)
+  -l, --locations strings        locations to search (default [cary,durham-east,durham-south])
+      --notify-unavailable       if set, send a notification if an appointment becomes unavailable (default true)
+      --stop-on-failure          if set, completely stop on failure instead of just logging
+      --timeout duration         timeout for each search, in seconds (default 5m0s)
 ```
 
-### Examples
+## Examples
 
 Run in headless mode:
 
 ```
-go run ./cmd/ncdmv -locations=cary,durham-east,durham-south -discord_webhook=[WEBHOOK]
+go run ./cmd/ncdmv -l cary,durham-east,durham-south -w [WEBHOOK] --database-path ./ncdmv.db
 ```
 
-Show the browser with a timeout of 2 minutes each check (across all locations) and an interval of 10 minutes:
+Show the browser with a timeout of 5 minutes each check (across all locations) and an interval of 10 minutes:
 
 ```
-go run ./cmd/ncdmv -headless=false -locations=cary,durham-east,durham-south -discord_webhook=[WEBHOOK] -timeout=120 -interval=10
+go run ./cmd/ncdmv -l cary,durham-east,durham-south -w [WEBHOOK] --database-path ./ncdmv.db --headless false --timeout 5m --interval 10m
 ```
 
-### Docker
+## Docker
 
 Run on Docker:
 
 ```
-docker run --rm -v $(pwd):/config ghcr.io/aksiksi/ncdmv:latest -database_path=/config/ncdmv.db
+docker run --rm -v $(pwd):/config ghcr.io/aksiksi/ncdmv:latest --database-path /config/ncdmv.db
 ```
+
+## Docker Compose
+
+```yaml
+services:
+  ncdmv:
+    volumes:
+      - /var/volumes/ncdmv:/config
+    environment:
+      NCDMV_APPT_TYPE: permit
+      NCDMV_DATABASE_PATH: /config/ncdmv.db
+      NCDMV_LOCATIONS: durham-east,cary
+      NCDMV_DISCORD_WEBHOOK: https://...
+      NCDMV_TIMEOUT: 5m
+      NCDMV_INTERNVAL: 5m
+    command: |
+      ncdmv -t $NCDMV_APPT_TYPE \
+            -d $NCDMV_DATABASE_PATH \
+            -l $NCDMV_LOCATIONS \
+            -w $NCDMV_WEBHOOK \
+            --timeout $NCDMV_TIMEOUT \
+            --interval $NCDMV_INTERVAL
+```
+
+## Appendix
 
 ### If you are new to Go
 

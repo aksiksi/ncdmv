@@ -22,7 +22,7 @@
           inherit pname;
           inherit version;
           src = ./.;
-          vendorHash = "sha256-mW+0FAVnBP5ISpQgBcAIUmvayMeu0dLfo6tcpHYoMfs=";
+          vendorHash = "sha256-IhB0urJVKYbIIFSoiuR92/KlTe+gxOcIuLEZrZYyxO0=";
           buildInputs = [
             pkgs.sqlite
           ];
@@ -59,6 +59,14 @@
               # DB storage
               "/config" = null;
             };
+            Env = [
+              "NCDMV_APPT_TYPE="
+              "NCDMV_DATABASE_PATH=/config/ncdmv.db"
+              "NCDMV_LOCATIONS="
+              "NCDMV_DISCORD_WEBHOOK="
+              "NCDMV_TIMEOUT=5m0s"
+              "NCDMV_INTERNVAL=5m0s"
+            ];
           };
         };
       }
