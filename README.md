@@ -38,18 +38,18 @@ go run ./cmd/ncdmv -l cary,durham-east,durham-south -w [WEBHOOK] --database-path
 Show the browser with a timeout of 5 minutes each check (across all locations) and an interval of 10 minutes:
 
 ```
-go run ./cmd/ncdmv -l cary,durham-east,durham-south -w [WEBHOOK] --database-path ./ncdmv.db --headless false --timeout 5m --interval 10m
+go run ./cmd/ncdmv -l cary,durham-east,durham-south -w [WEBHOOK] --database-path ./ncdmv.db --timeout 5m --interval 10m --headless=false 
 ```
 
 ## Docker
 
-Run on Docker:
+Note: you can only run headless Chrome with Docker.
 
 ```
-docker run --rm -v $(pwd):/config ghcr.io/aksiksi/ncdmv:latest --database-path /config/ncdmv.db
+docker run --rm -v $(pwd):/config -e NCDMV_APPT_TYPE=permit -e NCDMV_LOCATIONS=cary,durham-east ghcr.io/aksiksi/ncdmv:latest
 ```
 
-## Docker Compose
+### Docker Compose
 
 ```yaml
 services:
@@ -58,18 +58,12 @@ services:
       - /var/volumes/ncdmv:/config
     environment:
       NCDMV_APPT_TYPE: permit
-      NCDMV_DATABASE_PATH: /config/ncdmv.db
-      NCDMV_LOCATIONS: durham-east,cary
-      NCDMV_DISCORD_WEBHOOK: https://...
-      NCDMV_TIMEOUT: 5m
-      NCDMV_INTERNVAL: 5m
-    command: |
-      ncdmv -t $NCDMV_APPT_TYPE \
-            -d $NCDMV_DATABASE_PATH \
-            -l $NCDMV_LOCATIONS \
-            -w $NCDMV_WEBHOOK \
-            --timeout $NCDMV_TIMEOUT \
-            --interval $NCDMV_INTERVAL
+      NCDMV_LOCATIONS: cary,durham-east
+      NCDMV_DISCORD_WEBHOOK: "https://..." # optional
+      NCDMV_TIMEOUT: 5m # optional
+      NCDMV_INTERVAL: 5m # optional
+      NCDMV_NOTIFY_UNAVAILABLE: true # optional
+      NCDMV_DISABLE_GPU: false # optional
 ```
 
 ## Appendix

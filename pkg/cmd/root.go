@@ -31,17 +31,17 @@ type Args struct {
 
 func parseFlags(cmd *cobra.Command) *Args {
 	args := Args{}
-	cmd.PersistentFlags().StringVarP(&args.ApptType, "appt-type", "t", "permit", fmt.Sprintf("appointment type (one of: %s)", ncdmv.ValidApptTypes()))
-	cmd.PersistentFlags().StringVarP(&args.DatabasePath, "database-path", "d", "", "database path")
-	cmd.PersistentFlags().StringSliceVarP(&args.Locations, "locations", "l", []string{"cary", "durham-east", "durham-south"}, "locations to search")
-	cmd.PersistentFlags().StringVarP(&args.DiscordWebhook, "discord-webhook", "w", "", "Discord webhook URL")
-	cmd.PersistentFlags().DurationVar(&args.Timeout, "timeout", 5*time.Minute, "timeout for each search, in seconds")
-	cmd.PersistentFlags().DurationVar(&args.Interval, "interval", 5*time.Minute, "interval between searches")
-	cmd.PersistentFlags().BoolVar(&args.StopOnFailure, "stop-on-failure", false, "if set, completely stop on failure instead of just logging")
-	cmd.PersistentFlags().BoolVar(&args.NotifyUnavailable, "notify-unavailable", true, "if set, send a notification if an appointment becomes unavailable")
-	cmd.PersistentFlags().BoolVar(&args.Headless, "headless", true, "run Chrome in headless mode (no GUI)")
-	cmd.PersistentFlags().BoolVar(&args.DisableGpu, "disable-gpu", false, "disable GPU acceleration")
-	cmd.PersistentFlags().BoolVar(&args.Debug, "debug", false, "enable debug mode")
+	cmd.Flags().StringVarP(&args.ApptType, "appt-type", "t", "permit", fmt.Sprintf("appointment type (one of: %s)", ncdmv.ValidApptTypes()))
+	cmd.Flags().StringVarP(&args.DatabasePath, "database-path", "d", "", "database path")
+	cmd.Flags().StringSliceVarP(&args.Locations, "locations", "l", []string{"cary", "durham-east", "durham-south"}, "locations to search")
+	cmd.Flags().StringVarP(&args.DiscordWebhook, "discord-webhook", "w", "", "Discord webhook URL")
+	cmd.Flags().DurationVar(&args.Timeout, "timeout", 5*time.Minute, "timeout for each search, in seconds")
+	cmd.Flags().DurationVar(&args.Interval, "interval", 5*time.Minute, "interval between searches")
+	cmd.Flags().BoolVar(&args.StopOnFailure, "stop-on-failure", false, "if set, completely stop on failure instead of just logging")
+	cmd.Flags().BoolVar(&args.NotifyUnavailable, "notify-unavailable", true, "if set, send a notification if an appointment becomes unavailable")
+	cmd.Flags().BoolVar(&args.Headless, "headless", true, "run Chrome in headless mode (no GUI)")
+	cmd.Flags().BoolVar(&args.DisableGpu, "disable-gpu", false, "disable GPU acceleration")
+	cmd.Flags().BoolVar(&args.Debug, "debug", false, "enable debug mode")
 
 	cmd.MarkFlagRequired("appt-type")
 	cmd.MarkFlagRequired("database-path")
@@ -54,13 +54,13 @@ func runCommand(args *Args) error {
 	ctx := context.Background()
 
 	if args.DatabasePath == "" {
-		log.Fatal("database path must be specified")
+		log.Fatal("--database-path must be non-empty")
 	}
 	if args.ApptType == "" {
-		log.Fatal("appt type must be specified")
+		log.Fatal("--appt-type must be specified")
 	}
 	if len(args.Locations) == 0 {
-		log.Fatalf("locations list must be specified")
+		log.Fatalf("--locations must be specified")
 	}
 
 	parsedApptType := ncdmv.StringToAppointmentType(args.ApptType)
@@ -109,6 +109,11 @@ func runCommand(args *Args) error {
 	if err != nil {
 		log.Fatalf("failed to create client: %v", err)
 	}
+	slog.Info("Created ncdmv client",
+		"webhook", args.DiscordWebhook != "",
+		"stopOnFailure", args.StopOnFailure,
+		"notifyUnavailable", args.NotifyUnavailable,
+	)
 
 	if err := client.Start(ctx, parsedApptType, locations, args.Timeout, args.Interval); err != nil {
 		log.Fatal(err)

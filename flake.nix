@@ -17,6 +17,20 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         selfPackages = self.outputs.packages.${system};
+        # Container entrypoint
+        entrypoint = pkgs.writeScript "docker-entrypoint.sh" ''
+          #!${pkgs.stdenv.shell}
+          exec ${selfPackages.default}/bin/ncdmv \
+            -t "$NCDMV_APPT_TYPE" \
+            -l "$NCDMV_LOCATIONS" \
+            -d "$NCDMV_DATABASE_PATH" \
+            -w "$NCDMV_DISCORD_WEBHOOK" \
+            --timeout "$NCDMV_TIMEOUT" \
+            --interval "$NCDMV_INTERVAL" \
+            --debug=$NCDMV_DEBUG \
+            --disable-gpu=$NCDMV_DISABLE_GPU \
+            --notify-unavailable=$NCDMV_NOTIFY_UNAVAILABLE
+        '';
       in {
         default = pkgs.buildGoModule {
           inherit pname;
@@ -43,9 +57,6 @@
             # Required for Chromium to run
             mkdir tmp
           '';
-          # Default is 100, so this ensures the final image gets its own
-          # layer(s) after being merged with this base image.
-          maxLayers = 90;
         };
         docker = pkgs.dockerTools.streamLayeredImage {
           name = "ghcr.io/aksiksi/ncdmv";
@@ -54,20 +65,26 @@
           # Use commit date to ensure image creation date is reproducible.
           created = builtins.substring 0 8 self.lastModifiedDate;
           config = {
-            Entrypoint = [ "${selfPackages.default}/bin/ncdmv" ];
+            Entrypoint = [ entrypoint ];
             Volumes = {
               # DB storage
-              "/config" = null;
+              "/config" = {};
             };
             Env = [
               "NCDMV_APPT_TYPE="
-              "NCDMV_DATABASE_PATH=/config/ncdmv.db"
               "NCDMV_LOCATIONS="
+              "NCDMV_DATABASE_PATH=/config/ncdmv.db"
               "NCDMV_DISCORD_WEBHOOK="
-              "NCDMV_TIMEOUT=5m0s"
-              "NCDMV_INTERNVAL=5m0s"
+              "NCDMV_TIMEOUT=5m"
+              "NCDMV_INTERVAL=5m"
+              "NCDMV_DEBUG=false"
+              "NCDMV_DISABLE_GPU=false"
+              "NCDMV_NOTIFY_UNAVAILABLE=true"
             ];
           };
+          # Default is 100, so this ensures this image gets its own layer(s)
+          # after being merged with the base image.
+          maxLayers = 120;
         };
       }
     );
