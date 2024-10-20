@@ -1,6 +1,14 @@
 name: sqlc
 
-on: [push]
+on:
+  push:
+    paths-ignore:
+      - '**/*.md'
+    branches:
+      - main
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
 
 jobs:
   sqlc-diff:
