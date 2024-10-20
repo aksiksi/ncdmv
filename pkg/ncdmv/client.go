@@ -45,6 +45,8 @@ const (
 	numAppointmentsPerDiscordNotification = 10
 
 	temporaryErrString = "Could not find node with given id"
+
+	defaultWaitTimeout = 30 * time.Second
 )
 
 var tz = loadTimezoneUnchecked("America/New_York")
@@ -113,7 +115,7 @@ func extractAppointmentTimesForDay(ctx context.Context, apptType AppointmentType
 	// This selects options from the appointment time dropdown that match the selected appointment type.
 	optionSelector := fmt.Sprintf(`option[%s="%d"]`, appointmentTypeIDAttributeName, apptType)
 
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, defaultWaitTimeout)
 	defer cancel()
 
 	var timeDropdownHtml string
@@ -162,7 +164,7 @@ func findAvailableAppointmentDateNodeIDs(ctx context.Context) ([]cdp.NodeID, err
 	// To circumvent this behavior, we define a new context timeout that will be cancelled if no node is found.
 	//
 	// See: https://github.com/chromedp/chromedp/issues/379
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, defaultWaitTimeout)
 	defer cancel()
 
 	var nodeIDs []cdp.NodeID
