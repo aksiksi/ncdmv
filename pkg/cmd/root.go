@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -27,6 +28,7 @@ type Args struct {
 	Headless          bool
 	DisableGpu        bool
 	Debug             bool
+	DebugChrome       bool
 }
 
 func parseFlags(cmd *cobra.Command) *Args {
@@ -42,6 +44,7 @@ func parseFlags(cmd *cobra.Command) *Args {
 	cmd.Flags().BoolVar(&args.Headless, "headless", true, "run Chrome in headless mode (no GUI)")
 	cmd.Flags().BoolVar(&args.DisableGpu, "disable-gpu", false, "disable GPU acceleration")
 	cmd.Flags().BoolVar(&args.Debug, "debug", false, "enable debug mode")
+	cmd.Flags().BoolVar(&args.DebugChrome, "debug-chrome", false, "enable debug mode for Chrome")
 
 	cmd.MarkFlagRequired("appt-type")
 	cmd.MarkFlagRequired("database-path")
@@ -52,6 +55,19 @@ func parseFlags(cmd *cobra.Command) *Args {
 
 func runCommand(args *Args) error {
 	ctx := context.Background()
+
+	// Setup logger
+	level := &slog.LevelVar{}
+	if args.Debug {
+		level.Set(slog.LevelDebug)
+	} else {
+		level.Set(slog.LevelInfo)
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: level,
+	}))
+	slog.SetDefault(logger)
+	slog.InfoContext(ctx, "Setup logger", "debug", logger.Enabled(ctx, slog.LevelDebug))
 
 	if args.DatabasePath == "" {
 		log.Fatal("--database-path must be non-empty")
@@ -78,38 +94,38 @@ func runCommand(args *Args) error {
 	}
 
 	disableGpu := args.DisableGpu
-	slog.Info("GPU support", "disabled", disableGpu)
+	slog.InfoContext(ctx, "GPU support", "disabled", disableGpu)
 
 	db, err := sql.Open("sqlite", args.DatabasePath)
 	if err != nil {
 		log.Fatalf("Failed to initialize DB: %s", err)
 	}
 	defer db.Close()
-	slog.Info("Loaded DB successfully")
+	slog.InfoContext(ctx, "Loaded DB successfully")
 
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON;"); err != nil {
 		log.Fatalf("Failed to enable foreign key support: %s", err)
 	}
-	slog.Info("Enabled foreign key support")
+	slog.InfoContext(ctx, "Enabled foreign key support")
 
-	slog.Info("Running all up migrations...", "databasePath", args.DatabasePath)
+	slog.InfoContext(ctx, "Running all up migrations...", "databasePath", args.DatabasePath)
 	if err := models.RunMigrations(args.DatabasePath, 0 /* count */, false /* down */); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
 	// Initialize the Chrome context and open a new window.
-	ctx, cancel, err := ncdmv.NewChromeContext(ctx, args.Headless, disableGpu, args.Debug)
+	ctx, cancel, err := ncdmv.NewChromeContext(ctx, args.Headless, disableGpu, args.DebugChrome)
 	if err != nil {
 		log.Fatalf("Failed to init Chrome context: %s", err)
 	}
 	defer cancel()
-	slog.Info("Initialized Chrome context", "headless", args.Headless, "debug", args.Debug)
+	slog.InfoContext(ctx, "Initialized Chrome context", "headless", args.Headless, "debug", args.DebugChrome)
 
 	client := ncdmv.NewClient(db, args.DiscordWebhook, args.StopOnFailure, args.NotifyUnavailable)
 	if err != nil {
 		log.Fatalf("failed to create client: %v", err)
 	}
-	slog.Info("Created ncdmv client",
+	slog.InfoContext(ctx, "Created ncdmv client",
 		"webhook", args.DiscordWebhook != "",
 		"stopOnFailure", args.StopOnFailure,
 		"notifyUnavailable", args.NotifyUnavailable,

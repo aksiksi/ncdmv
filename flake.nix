@@ -27,9 +27,10 @@
             -w "$NCDMV_DISCORD_WEBHOOK" \
             --timeout "$NCDMV_TIMEOUT" \
             --interval "$NCDMV_INTERVAL" \
-            --debug=$NCDMV_DEBUG \
+            --notify-unavailable=$NCDMV_NOTIFY_UNAVAILABLE \
             --disable-gpu=$NCDMV_DISABLE_GPU \
-            --notify-unavailable=$NCDMV_NOTIFY_UNAVAILABLE
+            --debug=$NCDMV_DEBUG \
+            --debug-chrome=$NCDMV_DEBUG_CHROME
         '';
       in {
         default = pkgs.buildGoModule {
@@ -77,9 +78,10 @@
               "NCDMV_DISCORD_WEBHOOK="
               "NCDMV_TIMEOUT=5m"
               "NCDMV_INTERVAL=5m"
-              "NCDMV_DEBUG=false"
               "NCDMV_DISABLE_GPU=false"
               "NCDMV_NOTIFY_UNAVAILABLE=true"
+              "NCDMV_DEBUG=false"
+              "NCDMV_DEBUG_CHROME=false"
             ];
           };
           # Default is 100, so this ensures this image gets its own layer(s)

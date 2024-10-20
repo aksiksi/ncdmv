@@ -45,8 +45,6 @@ const (
 	numAppointmentsPerDiscordNotification = 10
 
 	temporaryErrString = "Could not find node with given id"
-
-	defaultWaitTimeout = 30 * time.Second
 )
 
 var tz = loadTimezoneUnchecked("America/New_York")
@@ -81,7 +79,7 @@ func NewClient(db *sql.DB, discordWebhook string, stopOnFailure, notifyUnavailab
 	}
 }
 
-func isLocationAvailable(ctx context.Context, apptType AppointmentType, location Location) (bool, error) {
+func isLocationAvailable(ctx context.Context, location Location) (bool, error) {
 	// Wait for the location and read the node.
 	var nodes []*cdp.Node
 	if err := chromedp.Run(ctx,
@@ -115,7 +113,7 @@ func extractAppointmentTimesForDay(ctx context.Context, apptType AppointmentType
 	// This selects options from the appointment time dropdown that match the selected appointment type.
 	optionSelector := fmt.Sprintf(`option[%s="%d"]`, appointmentTypeIDAttributeName, apptType)
 
-	ctx, cancel := context.WithTimeout(ctx, defaultWaitTimeout)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	var timeDropdownHtml string
@@ -126,7 +124,7 @@ func extractAppointmentTimesForDay(ctx context.Context, apptType AppointmentType
 		// Extract the HTML for the time dropdown.
 		chromedp.OuterHTML(appointmentTimeDropdownSelector, &timeDropdownHtml, chromedp.ByQuery),
 	); err != nil {
-		if ctx.Err() != nil {
+		if err == context.DeadlineExceeded {
 			// No valid times were found in the dropdown.
 			return nil, nil
 		}
@@ -164,7 +162,7 @@ func findAvailableAppointmentDateNodeIDs(ctx context.Context) ([]cdp.NodeID, err
 	// To circumvent this behavior, we define a new context timeout that will be cancelled if no node is found.
 	//
 	// See: https://github.com/chromedp/chromedp/issues/379
-	ctx, cancel := context.WithTimeout(ctx, defaultWaitTimeout)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	var nodeIDs []cdp.NodeID
@@ -175,9 +173,10 @@ func findAvailableAppointmentDateNodeIDs(ctx context.Context) ([]cdp.NodeID, err
 		// Find all active/clickable day nodes.
 		chromedp.NodeIDs(appointmentDayLinkSelector, &nodeIDs, chromedp.ByQueryAll),
 	); err != nil {
-		if ctx.Err() != nil {
+		if err == context.DeadlineExceeded {
 			// If the context was cancelled, it just means that no clickable date nodes were found
 			// on the page.
+			slog.DebugContext(ctx, "No clickable date nodes found on calendar")
 			return nil, nil
 		}
 		return nil, err
@@ -255,6 +254,8 @@ func navigateAppointmentCalendar(ctx context.Context, apptType AppointmentType) 
 		}
 		appointmentTimes = append(appointmentTimes, times...)
 
+		slog.DebugContext(ctx, "Finished processing days in selected month", "appointmentCount", len(times))
+
 		// Figure out if the next month button is clickable.
 		var attrValue string
 		var attrExists bool
@@ -266,6 +267,7 @@ func navigateAppointmentCalendar(ctx context.Context, apptType AppointmentType) 
 			return nil, err
 		}
 		if !attrExists {
+			slog.DebugContext(ctx, "Next date button not clickable calendar")
 			break
 		}
 
@@ -273,6 +275,7 @@ func navigateAppointmentCalendar(ctx context.Context, apptType AppointmentType) 
 		if err := chromedp.Run(ctx, chromedp.Click([]cdp.NodeID{nodeIDs[0]}, chromedp.ByNodeID)); err != nil {
 			return nil, err
 		}
+		slog.DebugContext(ctx, "Clicked next date button on calendar")
 	}
 
 	return appointmentTimes, nil
@@ -301,26 +304,31 @@ func findAvailableAppointments(ctx context.Context, apptType AppointmentType, lo
 	for {
 		switch state {
 		case appointmentFlowStateStart:
+			slog.DebugContext(ctx, "Start state")
 			// Navigate to the main page.
 			if _, err := chromedp.RunResponse(ctx, chromedp.Navigate(makeApptUrl)); err != nil {
 				return nil, err
 			}
 			state = appointmentFlowStateMainPage
 		case appointmentFlowStateMainPage:
+			slog.DebugContext(ctx, "Main page state")
 			// Click the "Make Appointment" button once it is visible.
 			if _, err := chromedp.RunResponse(ctx, chromedp.Click(makeApptButtonSelector, chromedp.NodeVisible, chromedp.ByQuery)); err != nil {
 				return nil, err
 			}
 			state = appointmentFlowStateAppointmentType
 		case appointmentFlowStateAppointmentType:
+			slog.DebugContext(ctx, "Appointment type state")
 			// Click the appointment type button.
 			if _, err := chromedp.RunResponse(ctx, chromedp.Click(apptType.ToSelector(), chromedp.NodeVisible, chromedp.ByQuery)); err != nil {
+				slog.DebugContext(ctx, "Failed to navigate to locations page", "err", err)
 				return nil, err
 			}
 			state = appointmentFlowStateLocationsPage
 		case appointmentFlowStateLocationsPage:
+			slog.DebugContext(ctx, "Locations page state")
 			// Check if the location is available.
-			isAvailable, err := isLocationAvailable(ctx, apptType, location)
+			isAvailable, err := isLocationAvailable(ctx, location)
 			if err != nil {
 				return nil, err
 			}
@@ -334,6 +342,7 @@ func findAvailableAppointments(ctx context.Context, apptType AppointmentType, lo
 			}
 			state = appointmentFlowStateLocationCalendar
 		case appointmentFlowStateLocationCalendar:
+			slog.DebugContext(ctx, "Location calendar state")
 			// Find available dates for this location by parsing the calendar HTML.
 			appointmentTimes, err := navigateAppointmentCalendar(ctx, apptType)
 			if err != nil {
@@ -350,7 +359,7 @@ func findAvailableAppointments(ctx context.Context, apptType AppointmentType, lo
 	}
 }
 
-func (c Client) sendDiscordMessage(content string) error {
+func (c Client) sendDiscordMessage(ctx context.Context, content string) error {
 	if c.discordWebhook == "" {
 		// Nothing to do here.
 		return nil
@@ -363,6 +372,8 @@ func (c Client) sendDiscordMessage(content string) error {
 	}); err != nil {
 		return fmt.Errorf("failed to send message to Discord webhook: %w", err)
 	}
+
+	slog.DebugContext(ctx, "Sent message to Discord webhook")
 
 	return nil
 }
@@ -381,7 +392,6 @@ func (c Client) RunForLocations(ctx context.Context, apptType AppointmentType, l
 	var locationCtxCancels []context.CancelFunc
 	for range locations {
 		ctx, cancel := chromedp.NewContext(ctx)
-		defer cancel()
 		locationCtxs = append(locationCtxs, ctx)
 		locationCtxCancels = append(locationCtxCancels, cancel)
 	}
@@ -399,6 +409,8 @@ func (c Client) RunForLocations(ctx context.Context, apptType AppointmentType, l
 		i, location := i, location
 		ctx, cancel := locationCtxs[i], locationCtxCancels[i]
 		go func() {
+			// Cancelling the context closes the tab for the given location.
+			defer cancel()
 			slog.Debug("Starting to process location...", "location", location)
 			appointments, err := findAvailableAppointments(ctx, apptType, location)
 			resultChan <- locationResult{
@@ -406,8 +418,6 @@ func (c Client) RunForLocations(ctx context.Context, apptType AppointmentType, l
 				appointments: appointments,
 				err:          err,
 			}
-			// Cancelling the context closes the tab for the given location.
-			cancel()
 		}()
 	}
 
@@ -421,9 +431,9 @@ func (c Client) RunForLocations(ctx context.Context, apptType AppointmentType, l
 			return nil, result.err
 		}
 		if len(result.appointments) == 0 {
-			slog.Info("No appointments available", "location", location)
+			slog.InfoContext(ctx, "No appointments available", "location", location)
 		} else {
-			slog.Info("Found appointments in location", "location", location, "num_appointments", len(result.appointments))
+			slog.InfoContext(ctx, "Found appointments in location", "location", location, "num_appointments", len(result.appointments))
 		}
 		appointments = append(appointments, result.appointments...)
 	}
@@ -490,7 +500,7 @@ func (c Client) sendNotifications(ctx context.Context, apptType AppointmentType,
 		}
 
 		// Send the Discord message.
-		if err := c.sendDiscordMessage(b.String()); err != nil {
+		if err := c.sendDiscordMessage(ctx, b.String()); err != nil {
 			log.Printf("Failed to send message to Discord webhook %q: %v", c.discordWebhook, err)
 			continue
 		}
@@ -596,19 +606,21 @@ func (c Client) handleTick(ctx context.Context, apptType AppointmentType, locati
 		return fmt.Errorf("failed to delete appointments before current time (%v): %w", now, err)
 	}
 	if len(rows) > 0 {
-		slog.Info("Pruned invalid appointments", "count", len(rows))
+		slog.InfoContext(ctx, "Pruned invalid appointments", "count", len(rows))
 	}
 
 	existingAppointments, err := c.listExistingAppointmentsInLocations(ctx, now, locations)
 	if err != nil {
 		return err
 	}
-	slog.Info("Listed existing appointments in provided locations", "count", len(existingAppointments))
+	slog.InfoContext(ctx, "Listed existing appointments in provided locations", "count", len(existingAppointments))
 
+	slog.InfoContext(ctx, "Running for locations...", "locations", locations, "timeout", timeout)
 	appointments, err := c.RunForLocations(ctx, apptType, locations, timeout)
 	if err != nil {
 		return fmt.Errorf("failed to check locations: %w", err)
 	}
+	slog.InfoContext(ctx, "Done running for locations", "locations", locations)
 
 	// TODO(aksiksi): How do we handle failures after writing appointments to DB but before writing notifications?
 	//
@@ -643,20 +655,20 @@ func (c Client) handleTick(ctx context.Context, apptType AppointmentType, locati
 	}
 
 	appointmentsToUpdate, appointmentsToNotify := findAppointmentsToUpdateAndNotify(newAppointments, existingAppointments, locations)
-	slog.Info("Found appointments to update and notify", "to_update", len(appointmentsToUpdate), "to_notify", len(appointmentsToNotify))
+	slog.InfoContext(ctx, "Found appointments to update and notify", "to_update", len(appointmentsToUpdate), "to_notify", len(appointmentsToNotify))
 
 	if err := c.updateAppointments(ctx, appointmentsToUpdate); err != nil {
 		return fmt.Errorf("failed to update existing appointments: %w", err)
 	}
 	if len(appointmentsToUpdate) > 0 {
-		slog.Info("Updated appointments successfully", "count", len(appointmentsToUpdate))
+		slog.InfoContext(ctx, "Updated appointments successfully", "count", len(appointmentsToUpdate))
 	}
 
 	if err := c.sendNotifications(ctx, apptType, appointmentsToNotify, c.discordWebhook, 1*time.Second); err != nil {
 		return fmt.Errorf("failed to send notifications: %w", err)
 	}
 	if len(appointmentsToNotify) > 0 {
-		slog.Info("Sent notifications successfully", "count", len(appointmentsToNotify))
+		slog.InfoContext(ctx, "Sent notifications successfully", "count", len(appointmentsToNotify))
 	}
 
 	return nil
@@ -677,10 +689,10 @@ func (c Client) Start(ctx context.Context, apptType AppointmentType, locations [
 	t := time.NewTicker(interval)
 	defer t.Stop()
 
-	slog.Info("Starting client", "appt_type", apptType, "locations", locations, "timeout", timeout, "interval", interval)
+	slog.InfoContext(ctx, "Starting client", "appt_type", apptType, "locations", locations, "timeout", timeout, "interval", interval)
 
 	tick := func() error {
-		defer slog.Info("Sleeping between location checks...", "interval", interval)
+		defer slog.InfoContext(ctx, "Sleeping between location checks...", "interval", interval)
 		for {
 			if err := c.handleTick(ctx, apptType, locations, timeout); err != nil {
 				if strings.Contains(err.Error(), temporaryErrString) {

@@ -13,9 +13,10 @@ Usage:
   ncdmv [flags]
 
 Flags:
-  -t, --appt-type string         appointment type (one of: [driver-license-renewal id-card knowledge-test motorcycle-skills-test non-cdl-road-test permit driver-license driver-license-duplicate]) (default "permit")
+  -t, --appt-type string         appointment type (one of: [knowledge-test motorcycle-skills-test non-cdl-road-test permit driver-license driver-license-duplicate driver-license-renewal id-card]) (default "permit")
   -d, --database-path string     database path
       --debug                    enable debug mode
+      --debug-chrome             enable debug mode for Chrome
       --disable-gpu              disable GPU acceleration
   -w, --discord-webhook string   Discord webhook URL
       --headless                 run Chrome in headless mode (no GUI) (default true)
@@ -54,6 +55,7 @@ docker run --rm -v $(pwd):/config -e NCDMV_APPT_TYPE=permit -e NCDMV_LOCATIONS=c
 ```yaml
 services:
   ncdmv:
+    image: ghcr.io/aksiksi/ncdmv:latest
     volumes:
       - /var/volumes/ncdmv:/config
     environment:
