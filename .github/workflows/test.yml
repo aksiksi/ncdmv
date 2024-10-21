@@ -20,9 +20,12 @@ jobs:
         github_access_token: ${{ secrets.GITHUB_TOKEN }}
         nix_path: nixpkgs=channel:nixos-unstable
     - uses: DeterminateSystems/magic-nix-cache-action@main
+    - uses: browser-actions/setup-chrome@v1
+      with:
+        install-chromedriver: true
     - name: Run tests
       run: |
-        nix-shell -p chromium sqlite
+        nix-shell -p sqlite
         go test -v ./... -covermode=count -coverprofile=coverage.out
     - name: Upload coverage
       uses: codecov/codecov-action@v4
