@@ -20,10 +20,10 @@ jobs:
         github_access_token: ${{ secrets.GITHUB_TOKEN }}
         nix_path: nixpkgs=channel:nixos-unstable
     - uses: DeterminateSystems/magic-nix-cache-action@main
+    - name: Install Chrome and SQLite
+      run: nix-env -iA chromium sqlite
     - name: Run tests
-      run: |
-        nix-shell -p chromium sqlite
-        go test -v ./... -covermode=count -coverprofile=coverage.out
+      run: go test -v ./... -covermode=count -coverprofile=coverage.out
     - name: Upload coverage
       uses: codecov/codecov-action@v4
       with:
