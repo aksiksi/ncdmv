@@ -2,17 +2,29 @@ package ncdmv
 
 import (
 	"context"
+	"os/exec"
 	"path"
 	"testing"
 	"time"
 )
+
+func isChromeAvailable() bool {
+	_, err := exec.LookPath("google-chrome")
+	return err != nil
+}
 
 func getDBPath(t *testing.T) string {
 	d := t.TempDir()
 	return path.Join(d, "ncdmv.db")
 }
 
+// Smoke integration that makes sure the E2E path works by running a simple
+// search.
 func TestSmoke(t *testing.T) {
+	if !isChromeAvailable() {
+		t.Skip("Integration test requires Chrome")
+	}
+
 	ctx := context.Background()
 
 	client, err := NewClientFromOptions(ctx, ClientOptions{
