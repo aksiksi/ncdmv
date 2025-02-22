@@ -61,7 +61,7 @@
           inherit pname;
           inherit version;
           src = ./.;
-          vendorHash = "sha256-IhB0urJVKYbIIFSoiuR92/KlTe+gxOcIuLEZrZYyxO0=";
+          vendorHash = "sha256-enRqcu0brw0J7NPktMosRrI4W/nRg+oHk6INjgMTSBc=";
           buildInputs = [
             pkgs.sqlite
           ];
