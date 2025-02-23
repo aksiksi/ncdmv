@@ -11,6 +11,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/gtuk/discordwebhook"
 	"golang.org/x/exp/slices"
@@ -32,6 +33,7 @@ const (
 	appointmentTimeDropdownSelector      = "div.AppointmentTime select"
 	loadingSpinnerSelector               = "div.blockUI"
 	appointmentCalendarNextMonthSelector = "a.ui-datepicker-next"
+	apptTypeBlockLoaderSelector          = "div#BlockLoader"
 
 	// Class and attribute names
 	locationAvailableClassName       = "Active-Unit"
@@ -281,6 +283,24 @@ func navigateAppointmentCalendar(ctx context.Context, apptType AppointmentType) 
 	return appointmentTimes, nil
 }
 
+// Small helper that dismisses any JS dialogs if they appear.
+//
+// There is a dialog from NCDMV - not the standard permissions prompt! - that
+// we want to dismiss.
+func addDismissJSDialogListener(ctx context.Context) {
+	chromedp.ListenTarget(ctx, func(ev interface{}) {
+		if ev, ok := ev.(*page.EventJavascriptDialogOpening); ok {
+			t := page.HandleJavaScriptDialog(true)
+			go func() {
+				slog.DebugContext(ctx, "dismissing JS dialog", "event", ev)
+				if err := chromedp.Run(ctx, t); err != nil {
+					slog.ErrorContext(ctx, "failed to dismiss JS dialog", "err", err)
+				}
+			}()
+		}
+	})
+}
+
 // appointmentFlowState represents the current state of the appointment workflow for a single location.
 type appointmentFlowState int
 
@@ -301,6 +321,9 @@ const (
 func findAvailableAppointments(ctx context.Context, apptType AppointmentType, location Location) (appointments []*Appointment, _ error) {
 	state := appointmentFlowStateStart
 
+	// Add a listener for the JS dialog for location and close it if it appears.
+	addDismissJSDialogListener(ctx)
+
 	for {
 		switch state {
 		case appointmentFlowStateStart:
@@ -319,11 +342,27 @@ func findAvailableAppointments(ctx context.Context, apptType AppointmentType, lo
 			state = appointmentFlowStateAppointmentType
 		case appointmentFlowStateAppointmentType:
 			slog.DebugContext(ctx, "Appointment type state")
-			// Click the appointment type button.
-			if _, err := chromedp.RunResponse(ctx, chromedp.Click(apptType.ToSelector(), chromedp.NodeVisible, chromedp.ByQuery)); err != nil {
+
+			// JS script to remove the loader element that blocks interaction.
+			//
+			// This element seems to persist if the location permissions prompt
+			// remains unhandled.
+			removeBlockerLoaderScript := fmt.Sprintf(`document.querySelector("%s").remove()`, apptTypeBlockLoaderSelector)
+
+			if _, err := chromedp.RunResponse(ctx,
+				// Wait for loader to appear.
+				chromedp.WaitVisible(apptTypeBlockLoaderSelector, chromedp.ByQuery),
+
+				// Delete the loader element to allow us to proceed.
+				chromedp.Evaluate(removeBlockerLoaderScript, nil),
+
+				// Click the appointment type button.
+				chromedp.Click(apptType.ToSelector(), chromedp.NodeVisible, chromedp.ByQuery),
+			); err != nil {
 				slog.DebugContext(ctx, "Failed to navigate to locations page", "err", err)
 				return nil, err
 			}
+
 			state = appointmentFlowStateLocationsPage
 		case appointmentFlowStateLocationsPage:
 			slog.DebugContext(ctx, "Locations page state")
