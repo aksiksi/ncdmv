@@ -22,9 +22,9 @@ type ClientOptions struct {
 	DebugChrome       bool
 }
 
-func NewClientFromOptions(ctx context.Context, opts ClientOptions) (_ *Client, cleanup func(), err error) {
+func NewClientFromOptions(ctx context.Context, opts ClientOptions) (_ *Client, chromeCtx context.Context, cleanup func(), err error) {
 	if opts.DatabasePath == "" {
-		return nil, nil, fmt.Errorf("database-path must be non-empty")
+		return nil, nil, nil, fmt.Errorf("database-path must be non-empty")
 	}
 
 	disableGpu := opts.DisableGpu
@@ -32,7 +32,7 @@ func NewClientFromOptions(ctx context.Context, opts ClientOptions) (_ *Client, c
 
 	db, err := sql.Open("sqlite", opts.DatabasePath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to initialize DB: %w", err)
+		return nil, nil, nil, fmt.Errorf("Failed to initialize DB: %w", err)
 	}
 	slog.InfoContext(ctx, "Loaded DB successfully")
 
@@ -43,19 +43,19 @@ func NewClientFromOptions(ctx context.Context, opts ClientOptions) (_ *Client, c
 	}()
 
 	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON;"); err != nil {
-		return nil, nil, fmt.Errorf("Failed to enable foreign key support: %w", err)
+		return nil, nil, nil, fmt.Errorf("Failed to enable foreign key support: %w", err)
 	}
 	slog.InfoContext(ctx, "Enabled foreign key support")
 
 	slog.InfoContext(ctx, "Running all up migrations...", "databasePath", opts.DatabasePath)
 	if err := models.RunMigrations(opts.DatabasePath, 0 /* count */, false /* down */); err != nil {
-		return nil, nil, fmt.Errorf("Failed to run migrations: %w", err)
+		return nil, nil, nil, fmt.Errorf("Failed to run migrations: %w", err)
 	}
 
 	// Initialize the Chrome context and open a new window.
-	ctx, cancelChrome, err := NewChromeContext(ctx, opts.Headless, disableGpu, opts.DebugChrome)
+	chromeCtx, cancelChrome, err := NewChromeContext(ctx, opts.Headless, disableGpu, opts.DebugChrome)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to init Chrome context: %w", err)
+		return nil, nil, nil, fmt.Errorf("Failed to init Chrome context: %w", err)
 	}
 	slog.InfoContext(ctx, "Initialized Chrome context", "headless", opts.Headless, "debug", opts.DebugChrome)
 
@@ -71,5 +71,5 @@ func NewClientFromOptions(ctx context.Context, opts ClientOptions) (_ *Client, c
 		cancelChrome()
 	}
 
-	return client, cleanup, nil
+	return client, chromeCtx, cleanup, nil
 }

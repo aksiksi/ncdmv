@@ -677,6 +677,8 @@ func (c Client) handleTick(ctx context.Context, apptType AppointmentType, locati
 // Start runs the NC DMV client for the given locations. A search will be run for all locations based on
 // the specified interval.
 //
+// The passed in context _must_ be a valid chromedp context.
+//
 // Note that this method will block until the context is cancelled. If you want to just run a single search synchronously,
 // you should use RunForLocations.
 //
@@ -690,6 +692,10 @@ func (c Client) Start(ctx context.Context, apptType AppointmentType, locations [
 	defer t.Stop()
 
 	slog.InfoContext(ctx, "Starting client", "appt_type", apptType, "locations", locations, "timeout", timeout, "interval", interval)
+
+	if err := chromedp.Run(ctx); err != nil {
+		return fmt.Errorf("failed to start Chrome: %w", err)
+	}
 
 	tick := func() error {
 		defer slog.InfoContext(ctx, "Sleeping between location checks...", "interval", interval)

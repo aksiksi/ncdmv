@@ -91,13 +91,13 @@ func runCommand(args *Args) error {
 		DebugChrome:       args.DebugChrome,
 	}
 
-	client, cleanup, err := ncdmv.NewClientFromOptions(ctx, clientOpts)
+	client, chromeCtx, cleanup, err := ncdmv.NewClientFromOptions(ctx, clientOpts)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer cleanup()
 
-	return client.Start(ctx, parsedApptType, locations, args.Timeout, args.Interval)
+	return client.Start(chromeCtx, parsedApptType, locations, args.Timeout, args.Interval)
 }
 
 func Execute() error {
