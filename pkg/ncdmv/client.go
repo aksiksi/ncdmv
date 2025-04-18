@@ -288,12 +288,12 @@ func navigateAppointmentCalendar(ctx context.Context, apptType AppointmentType) 
 // There is a dialog from NCDMV - not the standard permissions prompt! - that
 // we want to dismiss.
 func addDismissJSDialogListener(ctx context.Context) {
-	chromedp.ListenTarget(ctx, func(ev interface{}) {
+	chromedp.ListenTarget(ctx, func(ev any) {
 		if ev, ok := ev.(*page.EventJavascriptDialogOpening); ok {
-			t := page.HandleJavaScriptDialog(true)
 			go func() {
+				task := page.HandleJavaScriptDialog(true)
 				slog.DebugContext(ctx, "dismissing JS dialog", "event", ev)
-				if err := chromedp.Run(ctx, t); err != nil {
+				if err := chromedp.Run(ctx, task); err != nil {
 					slog.ErrorContext(ctx, "failed to dismiss JS dialog", "err", err)
 				}
 			}()
@@ -430,9 +430,9 @@ func (c Client) RunForLocations(ctx context.Context, apptType AppointmentType, l
 	var locationCtxs []context.Context
 	var locationCtxCancels []context.CancelFunc
 	for range locations {
-		ctx, cancel := chromedp.NewContext(ctx)
-		locationCtxs = append(locationCtxs, ctx)
-		locationCtxCancels = append(locationCtxCancels, cancel)
+		tabCtx, tabCancel := chromedp.NewContext(ctx)
+		locationCtxs = append(locationCtxs, tabCtx)
+		locationCtxCancels = append(locationCtxCancels, tabCancel)
 	}
 
 	type locationResult struct {
@@ -445,13 +445,12 @@ func (c Client) RunForLocations(ctx context.Context, apptType AppointmentType, l
 	// Spawn a goroutine for each location. Each location is processed in a separate
 	// browser tab. Once processing completes for a location, its tab will be closed.
 	for i, location := range locations {
-		i, location := i, location
-		ctx, cancel := locationCtxs[i], locationCtxCancels[i]
+		tabCtx, tabCancel := locationCtxs[i], locationCtxCancels[i]
 		go func() {
 			// Cancelling the context closes the tab for the given location.
-			defer cancel()
+			defer tabCancel()
 			slog.Debug("Starting to process location...", "location", location)
-			appointments, err := findAvailableAppointments(ctx, apptType, location)
+			appointments, err := findAvailableAppointments(tabCtx, apptType, location)
 			resultChan <- locationResult{
 				idx:          i,
 				appointments: appointments,
