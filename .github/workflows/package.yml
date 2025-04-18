@@ -64,5 +64,7 @@ jobs:
           ./result | docker image load
           # Tag the image with the commit hash
           docker image tag ghcr.io/aksiksi/ncdmv:latest ghcr.io/aksiksi/ncdmv:${{ github.sha }}
-      - name: Push image
-        run: docker push -a ghcr.io/aksiksi/ncdmv
+      # TODO(aksiksi): Re-add this once we've properly configured the Docker image
+      # for multi-arch build. For now, we'll only published x64 images.
+      #- name: Push image
+      #  run: docker push -a ghcr.io/aksiksi/ncdmv

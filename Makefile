@@ -13,7 +13,7 @@ clean:
 	rm -f ./ncdmv
 
 shell:
-	nix develop
+	nix develop -c zsh
 
 docker:
 	nix build .#docker
